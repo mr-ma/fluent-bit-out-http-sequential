@@ -1,15 +1,26 @@
 # fluent-bit-out-http-sequential-plugin
-A work around for `fluent-bit` to get `out-http` to submit long chunks sequentially 
+A plugin for `fluent-bit` to get `out-http` to submit long chunks sequentially 
 
-
-# Approach one: Hack out_http to submit requests sequentially 
-
-## Create a docker file with the hacked out_http plugin
-Make sure you are on the `hack-out-http` branch
+# Approach zero: Utilize out_sequentialhttp plugin for submitting requests sequentially 
+## Create a docker file with the out_sequentialhttp plugin in it
+Make sure you are on the `plugin-out-sequentialhttp` branch
 
 A sample docker file is provided in the root of the repository. Build the stock image:
 
-```docker build . -t stock-fluent-bit-image```
+```docker build . -t plugin-fluent-bit-image```
+
+Note that we supply the plugin via `-e` flag in the Dockerfile:
+
+```
+CMD ["/fluent-bit/bin/fluent-bit", "-e", "/plugin/build/flb-out_sequentialhttp.so","-c", "/fluent-bit/etc/fluent-bit.conf"]
+```
+
+It is possible to supply plugins via `-p pluging.conf`, too:
+
+```
+[PLUGINS]
+    Path /plugin/out_sequentialhttp/build/out_sequentialhttp.so
+```
 
 ## Sample set up
 Let us use a mock server for the sake of this demonstration.
@@ -32,12 +43,7 @@ Let us use a mock server for the sake of this demonstration.
     Dummy             {"log":"level-info","msg":"succesful", "username":"username", "email":"email@email.com", "time":"2020-11-25T12:37:22Z"}
 
 [OUTPUT]
-    Name             stdout
-    Match            *
-    Format           json_stream
-
-[OUTPUT]
-    Name             http
+    Name             sequentialhttp
     Match            *
     Retry_Limit      False
     Host             mock
@@ -74,11 +80,8 @@ Here is the content of `initializer.json`:
 ```
 docker network create logging
 
-docker run --rm -it --name fluent --network logging --mount type=bind,source="$(pwd)",target="/fluent-bit/etc" docker.io/library/stock-fluent-bit-image
+docker run --rm -it --name fluent --network logging --mount type=bind,source="$(pwd)",target="/fluent-bit/etc" docker.io/library/plugin-fluent-bit-image
 
 docker run --rm --name mock --network logging -ti --mount type=bind,source="$(pwd)",target="/config" -p 8081:1080  mockserver/mockserver -serverPort 8081
 
 ```
-
-
-

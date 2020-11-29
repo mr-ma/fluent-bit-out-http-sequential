@@ -16,6 +16,7 @@ RUN apt-get update && \
       libasl-dev \
       libsasl2-dev \
       pkg-config \
+      libjemalloc-dev \
       libsystemd-dev \
       zlib1g-dev \
       ca-certificates \
@@ -27,11 +28,6 @@ RUN mkdir -p /fluent-bit/bin /fluent-bit/etc /fluent-bit/log /tmp/src/
 RUN curl -sSL https://github.com/fluent/fluent-bit/archive/v${FLB_VERSION}.tar.gz | \
     tar zx --strip=1 -C /tmp/src/
 
-# Single http post patch
-RUN rm -rf /tmp/src/plugins/out_http
-COPY patch/out_http /patch/out_http
-RUN mv /patch/out_http /tmp/src/plugins/out_http
-# End single http post patch
 
 # RUN rm -rf /tmp/src/build/*
 
@@ -49,6 +45,24 @@ RUN cmake -DFLB_DEBUG=Off \
 
 RUN make -j $(getconf _NPROCESSORS_ONLN)
 RUN install bin/fluent-bit /fluent-bit/bin/
+
+# Add dummy plugin
+# RUN rm -rf /fluent-bit-plugin
+# COPY fluent-bit-plugin /fluent-bit-plugin
+# RUN mkdir -p /fluent-bit-plugin/build/
+# WORKDIR /fluent-bit-plugin/build/
+# RUN cmake -DFLB_SOURCE=/tmp/src -DPLUGIN_NAME=out_stdout2  ../
+# RUN make MALLOC=libc  -j $(getconf _NPROCESSORS_ONLN)
+# End dummy plugin
+
+# Add sequentialhttp
+RUN rm -rf /plugin
+COPY plugin /plugin
+RUN mkdir -p /plugin/build/
+WORKDIR /plugin/build/
+RUN cmake -DFLB_SOURCE=/tmp/src -DPLUGIN_NAME=out_sequentialhttp  ../
+RUN make -j $(getconf _NPROCESSORS_ONLN)
+# End sequentialhttp
 
 # Configuration files
 WORKDIR /tmp/src/
@@ -74,8 +88,11 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists
 
 COPY --from=builder /fluent-bit /fluent-bit
-
+# dummy plugin
+# COPY --from=builder /fluent-bit-plugin /fluent-bit-plugin
+COPY --from=builder /plugin /plugin
 EXPOSE 2020
 
-
-CMD ["/fluent-bit/bin/fluent-bit","-c", "/fluent-bit/etc/fluent-bit.conf"]
+# DUMMY plugin
+#CMD ["/fluent-bit/bin/fluent-bit", "-e", "/fluent-bit-plugin/build/flb-out_stdout2.so","-c", "/fluent-bit/etc/fluent-bit.conf"]
+CMD ["/fluent-bit/bin/fluent-bit", "-e", "/plugin/build/flb-out_sequentialhttp.so","-c", "/fluent-bit/etc/fluent-bit.conf"]
